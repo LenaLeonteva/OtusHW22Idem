@@ -2,7 +2,7 @@ import {inject, lifeCycleObserver, LifeCycleObserver} from '@loopback/core';
 import {juggler} from '@loopback/repository';
 
 const config = {
-  name: 'order',
+  name: 'ordersDatasource',
   connector: 'memory',
   localStorage: '',
   file: 'src\store\orders.json'
@@ -13,13 +13,13 @@ const config = {
 // gracefully. The `stop()` method is inherited from `juggler.DataSource`.
 // Learn more at https://loopback.io/doc/en/lb4/Life-cycle.html
 @lifeCycleObserver('datasource')
-export class OrderDataSource extends juggler.DataSource
+export class OrdersDatasourceDataSource extends juggler.DataSource
   implements LifeCycleObserver {
-  static dataSourceName = 'order';
+  static dataSourceName = 'ordersDatasource';
   static readonly defaultConfig = config;
 
   constructor(
-    @inject('datasources.config.order', {optional: true})
+    @inject('datasources.config.ordersDatasource', {optional: true})
     dsConfig: object = config,
   ) {
     super(dsConfig);

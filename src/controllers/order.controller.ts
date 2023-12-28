@@ -1,5 +1,8 @@
-import {api, operation, param, requestBody} from '@loopback/rest';
+import {inject} from '@loopback/core';
+import {repository} from '@loopback/repository';
+import {Response, RestBindings, api, operation, param, requestBody} from '@loopback/rest';
 import {Order} from '../models/order.model';
+import {OrderRepository} from '../repositories';
 
 /**
  * The controller class is generated from OpenAPI spec with operations tagged
@@ -12,9 +15,8 @@ import {Order} from '../models/order.model';
       Order: {
         type: 'object',
         properties: {
-          id: {
+          orderID: {
             type: 'string',
-            id: true,
           },
           userID: {
             type: 'string',
@@ -23,25 +25,6 @@ import {Order} from '../models/order.model';
           price: {
             type: 'number',
             minimum: 0,
-          },
-          goods: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                goodID: {
-                  type: 'string',
-                },
-                num: {
-                  type: 'integer',
-                  minimum: 0,
-                },
-                goodPrice: {
-                  type: 'number',
-                  minimum: 0,
-                },
-              },
-            },
           },
         },
       },
@@ -82,24 +65,41 @@ import {Order} from '../models/order.model';
   paths: {},
 })
 export class OrderController {
-    constructor() {} 
+  constructor(
+    @repository(OrderRepository) private orderRepo: OrderRepository,
+    @inject(RestBindings.Http.RESPONSE) private response: Response,
+  ) {
+    console.log('Hello from Order Controller')
+  }
   /**
    *
    *
    * @param _requestBody Created order object
    */
   @operation('post', '/order/create', {
-  tags: [
-    'order',
-  ],
-  summary: 'Create order',
-  operationId: 'createOrder',
-  responses: {
-    default: {
-      description: 'successful operation',
+    tags: [
+      'order',
+    ],
+    summary: 'Create order',
+    operationId: 'createOrder',
+    responses: {
+      default: {
+        description: 'successful operation',
+      },
     },
-  },
-  requestBody: {
+    requestBody: {
+      content: {
+        'application/json': {
+          schema: {
+            $ref: '#/components/schemas/Order',
+          },
+        },
+      },
+      description: 'Created order object',
+      required: true,
+    },
+  })
+  async createOrder(@requestBody({
     content: {
       'application/json': {
         schema: {
@@ -109,20 +109,23 @@ export class OrderController {
     },
     description: 'Created order object',
     required: true,
-  },
-})
-  async createOrder(@requestBody({
-  content: {
-    'application/json': {
-      schema: {
-        $ref: '#/components/schemas/Order',
-      },
-    },
-  },
-  description: 'Created order object',
-  required: true,
-}) _requestBody: Order): Promise<unknown> {
-     throw new Error('Not implemented'); 
+  }) _requestBody: Order): Promise<any | undefined> {
+    if (!(_requestBody.orderID)) {
+      console.log("ERROR! Не указан идентификатор заказа");
+      return this.response.status(400).send(this.errorRes(400, 'Не указан идентификатор заказа!'));
+    }
+    const filter = {
+      where: {
+        orderID: _requestBody.orderID,
+      }
+    };
+    const sameID = await this.orderRepo.findOne(filter)
+    if (sameID) {
+      return this.response.status(400).send(this.errorRes(400, 'Это заказ уже был создан!'))
+    }
+    const newOrder = await this.orderRepo.create(_requestBody);
+
+    return this.response.status(200).send(newOrder);
   }
   /**
    * Returns order
@@ -131,55 +134,55 @@ export class OrderController {
    * @returns order response
    */
   @operation('get', '/order/{orderId}', {
-  tags: [
-    'order',
-  ],
-  description: 'Returns order',
-  operationId: 'find order by id',
-  responses: {
-    '200': {
-      description: 'order response',
-      content: {
-        'application/json': {
-          schema: {
-            $ref: '#/components/schemas/Order',
+    tags: [
+      'order',
+    ],
+    description: 'Returns order',
+    operationId: 'find order by id',
+    responses: {
+      '200': {
+        description: 'order response',
+        content: {
+          'application/json': {
+            schema: {
+              $ref: '#/components/schemas/Order',
+            },
+          },
+        },
+      },
+      default: {
+        description: 'unexpected error',
+        content: {
+          'application/json': {
+            schema: {
+              $ref: '#/components/schemas/Error',
+            },
           },
         },
       },
     },
-    default: {
-      description: 'unexpected error',
-      content: {
-        'application/json': {
-          schema: {
-            $ref: '#/components/schemas/Error',
-          },
+    parameters: [
+      {
+        name: 'orderId',
+        in: 'path',
+        description: 'ID of order',
+        required: true,
+        schema: {
+          type: 'string',
         },
       },
-    },
-  },
-  parameters: [
-    {
-      name: 'orderId',
-      in: 'path',
-      description: 'ID of order',
-      required: true,
-      schema: {
-        type: 'string',
-      },
-    },
-  ],
-})
+    ],
+  })
   async findOrderById(@param({
-  name: 'orderId',
-  in: 'path',
-  description: 'ID of order',
-  required: true,
-  schema: {
-    type: 'string',
-  },
-}) orderId: string): Promise<Order> {
-     throw new Error('Not implemented'); 
+    name: 'orderId',
+    in: 'path',
+    description: 'ID of order',
+    required: true,
+    schema: {
+      type: 'string',
+    },
+  }) orderId: string): Promise<Order> {
+    throw new Error('Not implemented');
   }
   /**
    * deletes a single order based on the ID supplied
@@ -187,48 +190,56 @@ export class OrderController {
    * @param orderId ID of order
    */
   @operation('delete', '/order/{orderId}', {
-  tags: [
-    'order',
-  ],
-  description: 'deletes a single order based on the ID supplied',
-  operationId: 'deleteOrder',
-  responses: {
-    '204': {
-      description: 'order deleted',
-    },
-    default: {
-      description: 'unexpected error',
-      content: {
-        'application/json': {
-          schema: {
-            $ref: '#/components/schemas/Error',
+    tags: [
+      'order',
+    ],
+    description: 'deletes a single order based on the ID supplied',
+    operationId: 'deleteOrder',
+    responses: {
+      '204': {
+        description: 'order deleted',
+      },
+      default: {
+        description: 'unexpected error',
+        content: {
+          'application/json': {
+            schema: {
+              $ref: '#/components/schemas/Error',
+            },
           },
         },
       },
     },
-  },
-  parameters: [
-    {
-      name: 'orderId',
-      in: 'path',
-      description: 'ID of order',
-      required: true,
-      schema: {
-        type: 'string',
+    parameters: [
+      {
+        name: 'orderId',
+        in: 'path',
+        description: 'ID of order',
+        required: true,
+        schema: {
+          type: 'string',
+        },
       },
-    },
-  ],
-})
+    ],
+  })
   async deleteOrder(@param({
-  name: 'orderId',
-  in: 'path',
-  description: 'ID of order',
-  required: true,
-  schema: {
-    type: 'string',
-  },
-}) orderId: string): Promise<unknown> {
-     throw new Error('Not implemented'); 
+    name: 'orderId',
+    in: 'path',
+    description: 'ID of order',
+    required: true,
+    schema: {
+      type: 'string',
+    },
+  }) orderId: string): Promise<unknown> {
+    throw new Error('Not implemented');
+  }
+
+  errorRes(code: number, mes: string): any {
+    return {
+      statusCode: code,
+      code: "error",
+      message: mes
+    }
   }
 }
 
